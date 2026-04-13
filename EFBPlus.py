@@ -12,7 +12,6 @@ from streamlit_drawable_canvas import st_canvas
 # --- 1. Database & Configuration ---
 SB_USER = "906331"
 
-# 完全版チェックリストDB（全機体網羅）
 cl_db = {
     "A350": {
         "COCKPIT PREP": ["PARKING BRAKE - SET", "ALL BATTERY SWITCH - ON", "EXTERNAL POWER - PUSH", "ADIRS (1, 2, 3) - NAV", "CREW SUPPLY - ON", "PACKS - AUTO", "NAV LIGHTS - ON", "LOGO LIGHTS - ON", "APU - MASTER-START", "NO SMOKING - AUTO", "NO MOBILE - AUTO", "EMERGENCY LIGHTS - ARMED", "FLIGHT DIRECTORS - ON", "ALTIMETERS - SET", "MCDU - SETUP", "FLT CTL PAGE - CHECK"],
@@ -111,9 +110,6 @@ st.markdown("""
 # --- 3. Session State Management ---
 if 'authenticated' not in st.session_state: st.session_state['authenticated'] = False
 if 'sb_json' not in st.session_state: st.session_state['sb_json'] = None
-if 'sw_running' not in st.session_state: st.session_state['sw_running'] = False
-if 'sw_start_time' not in st.session_state: st.session_state['sw_start_time'] = 0
-if 'timer_end' not in st.session_state: st.session_state['timer_end'] = None
 
 # --- 4. Logic Functions ---
 def fetch_simbrief(user_id):
@@ -135,32 +131,6 @@ else:
         """, unsafe_allow_html=True)
 
     with st.sidebar:
-        st.subheader("⏱️ TIME MANAGEMENT")
-        c1, c2 = st.columns(2)
-        if c1.button("START SW"):
-            st.session_state['sw_start_time'] = time.time()
-            st.session_state['sw_running'] = True
-        if c2.button("RESET SW"):
-            st.session_state['sw_running'] = False
-            st.session_state['sw_start_time'] = 0
-        
-        if st.session_state['sw_running']:
-            elapsed = time.time() - st.session_state['sw_start_time']
-            st.metric("STOPWATCH", time.strftime('%H:%M:%S', time.gmtime(elapsed)))
-        
-        t_min = st.number_input("MINUTES", 1, 180, 15)
-        if st.button("SET TIMER"):
-            st.session_state['timer_end'] = time.time() + (t_min * 60)
-        
-        if st.session_state['timer_end']:
-            rem = st.session_state['timer_end'] - time.time()
-            if rem > 0:
-                st.metric("REMAINING", time.strftime('%H:%M:%S', time.gmtime(rem)))
-            else:
-                st.warning("TIME UP!")
-                st.session_state['timer_end'] = None
-
-        st.markdown("---")
         menu = st.radio("MENU", ["OPERA MAIN", "CALCULATORS", "WEATHER", "SCRATCH PAD"])
 
     # --- Main Content ---
@@ -176,7 +146,7 @@ else:
         
         if st.session_state['sb_json']:
             sb = st.session_state['sb_json']
-            st.markdown(f"### ✈️ {sb['atc']['callsign']} | {sb['origin']['icao_code']} → {sb['destination']['icao_code']}")
+            st.markdown(f"### {sb['atc']['callsign']} | {sb['origin']['icao_code']} -> {sb['destination']['icao_code']}")
             st.markdown(f"""
             <table class='opera-table'>
                 <thead><tr><th>EVENT</th><th>PLAN</th><th>ACTUAL</th><th>REMARKS</th></tr></thead>
@@ -211,15 +181,10 @@ else:
     elif menu == "SCRATCH PAD":
         st_canvas(stroke_width=3, stroke_color="#000", background_color="#FFF", height=400, key="canvas")
 
-    # --- Checklist Tab (下部に常に表示) ---
+    # --- Checklist Tab ---
     st.markdown("---")
-    with st.expander("📋 AIRCRAFT CHECKLIST (FULL DATABASE)"):
+    with st.expander("CHECKLIST"):
         ac_type = st.selectbox("AIRCRAFT", list(cl_db.keys()))
         phase = st.radio("PHASE", list(cl_db[ac_type].keys()), horizontal=True)
         for item in cl_db[ac_type][phase]:
             st.checkbox(item, key=f"cl_{ac_type}_{phase}_{item}")
-
-    # Auto Refresh for Timers
-    if st.session_state['sw_running'] or st.session_state['timer_end']:
-        time.sleep(1)
-        st.rerun()
