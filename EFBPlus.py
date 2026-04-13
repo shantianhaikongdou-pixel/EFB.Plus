@@ -6,138 +6,187 @@ import re
 import time
 from streamlit_drawable_canvas import st_canvas
 
-# --- 1. 定数・設定 ---
-SB_USER = "906331"
-
-# チェックリストDB（絵文字なし・大文字のみ）
+# --- 1. CHECKLIST DATABASE ---
 cl_db = {
     "A350": {
         "COCKPIT PREP": ["PARKING BRAKE - SET", "ALL BATTERY SWITCH - ON", "EXTERNAL POWER - PUSH", "ADIRS (1, 2, 3) - NAV", "CREW SUPPLY - ON", "PACKS - AUTO", "NAV LIGHTS - ON", "LOGO LIGHTS - ON", "APU - MASTER-START", "NO SMOKING - AUTO", "NO MOBILE - AUTO", "EMERGENCY LIGHTS - ARMED", "FLIGHT DIRECTORS - ON", "ALTIMETERS - SET", "MCDU - SETUP", "FLT CTL PAGE - CHECK"],
         "BEFORE START": ["WINDOWS/DOORS - CLOSED", "BEACON - ON", "THRUST LEVERS - IDLE", "FUEL PUMPS - ON", "TRANSPONDER - AS REQ"],
         "AFTER START": ["ENGINE MODE SELECTOR - NORM", "PITCH TRIM - SET", "AUTOBRAKE - MAX", "FLAPS - SET", "GND SPOILERS - ARMED", "APU - OFF", "FLIGHT CONTROLS - CHECKED", "RUDDER TRIM - ZERO", "ANTI-ICE - AS REQ"],
         "TAXI/TAKEOFF": ["GROUND EQUIPMENT - CLEAR", "NOSEWHEEL LIGHTS - TAXI", "BRAKES - CHECK", "AUTO THRUST - BLUE", "TCAS - TA/RA", "PACKS - OFF/ON"],
-        "CRUISE": ["ALTIMETERS - STD", "ANTI-ICE - AS REQ", "ECAM MEMO - CHECKED"]
+        "CRUISE": ["ALTIMETERS - STD", "ANTI-ICE - AS REQ", "ECAM MEMO - CHECKED"],
+        "DESCENT/APPROACH": ["CABIN CREW - ADVISED", "ND TERRAIN - AS REQ", "APPROACH BUTTON - ARM", "APPR PHASE (MCDU) - ACTIVATE", "LANDING GEAR - DOWN"],
+        "LANDING": ["GND SPOILERS - ARM", "ENG MODE SELECTOR - AS REQ", "AUTOBRAKE - AS REQ", "FLAPS - SET LDG", "GO AROUND ALTITUDE - SET", "ECAM MEMO - LDG NO BLUE"],
+        "SHUTDOWN/SECURE": ["PARKING BRAKE - SET", "APU - START", "ENG 1 & 2 MASTER - OFF", "BEACON LIGHTS - OFF", "FLIGHT DIRECTORS - OFF", "PASSENGER SIGNS - OFF", "SLIDES - DISARM", "FUEL PUMPS - OFF", "DOORS - OPEN", "ADIRS - OFF", "EMERGENCY LIGHTS - OFF", "NAV/LOGO LIGHTS - OFF", "EXTERNAL POWER - OFF", "BATTERY - OFF"]
     },
     "B787": {
         "ELECTRICAL POWERUP": ["SERVICE INTERPHONE - OFF", "BACKUP WINDOW HEAT - ON", "PRIMARY WINDOW HEAT - ON", "ENGINE PRIMARY PUMP L&R - ON", "C1 & C2 ELEC PUMP - OFF", "L & R DEMAND PUMP - OFF", "SEAT BELT SIGNS - ON", "APU FIRE PANEL - SET", "CARGO FIRE ARM - NORM", "ENGINE EEC MODE - NORM", "FUEL JETTISON - OFF", "WING/ENGINE ANTI-ICE - AUTO"],
         "BEFORE START": ["FLIGHT DECK DOOR - CLOSED/LOCKED", "PASSENGER SIGNS - ON", "MCP - SET", "FMS - COMPLETED", "BEACON - ON"],
         "AFTER START/TAXI": ["FLAPS - SET", "AUTOBRAKE - RTO", "FLIGHT CONTROLS - CHECKED"],
-        "CLIMB/CRUISE": ["LANDING GEAR - UP", "FLAPS - UP", "ALTIMETERS - STD"]
+        "CLIMB/CRUISE": ["LANDING GEAR - UP", "FLAPS - UP", "ALTIMETERS - STD", "ANTI-ICE - AS REQ"],
+        "DESCENT": ["PRESSURIZATION (LDG ALT) - SET", "RECALL - CHECKED", "AUTOBRAKE - SET", "LANDING DATA (VREF) - VERIFY", "APPROACH BRIEFING - COMPLETE"],
+        "APPROACH/LANDING": ["ALTIMETER - RESET TO LOCAL", "SPEED - 250 KIAS (BELOW 10k)", "LANDING LIGHTS - ON", "SEAT BELTS - ON"],
+        "SHUTDOWN/POWER DOWN": ["PARKING BRAKE - SET", "APU - VERIFY RUNNING", "FUEL CONTROL SWITCHES - CUTOFF", "SEAT BELT SIGNS - OFF", "FUEL PUMPS - OFF", "BEACON LIGHT - OFF", "IRS SELECTORS - OFF", "FD DOOR POWER - OFF"]
     },
     "A320/321": {
         "COCKPIT PREP": ["GEAR PINS and COVERS - REMOVED", "FUEL QUANTITY - KG CHECK", "SIGNS - ON/AUTO", "ADIRS - NAV", "BARO REF - SET (BOTH)"],
         "BEFORE START": ["PARKING BRAKE - SET", "T.O SPEEDS & THRUST - BOTH SET", "WINDOWS/DOORS - CLOSED", "BEACON - ON"],
-        "AFTER START": ["APU - OFF", "Y ELEC PUMP - OFF", "ANTI ICE - AS REQ", "PITCH TRIM - SET", "RUDDER TRIM - ZERO"]
+        "AFTER START": ["APU - OFF", "Y ELEC PUMP - OFF", "ANTI ICE - AS REQ", "PITCH TRIM - SET", "RUDDER TRIM - ZERO"],
+        "APPROACH": ["BARO REF - SET", "SEAT BELTS - ON", "MINIMUM - SET", "ENG MODE SEL - AS REQ"],
+        "LANDING": ["G/A ALTITUDE - SET", "CABIN CREW - ADVISED", "ECAM MEMO - LDG NO BLUE", "LDG GEAR - DOWN", "SPLRS - ARM", "FLAPS - SET"],
+        "PARKING/SECURE": ["PARKING BRAKE - SET", "ENGINES - OFF", "FUEL PUMPS - OFF", "ADIRS - OFF", "EXT PWR - AS REQ"]
+    },
+    "B777": {
+        "PREFLIGHT": ["ADIRU Switch - ON", "Emergency Exit Lights - ARMED", "Hydraulic Panel - SET", "Electrical Panel - SET", "Packs - ON", "FMC - SETUP"],
+        "BEFORE START": ["Flight Deck Door - CLOSED", "Passenger Signs - ON", "MCP - SET", "Takeoff Speeds - SET", "Beacon - ON"],
+        "AFTER START/TAXI": ["Anti-ice - AS REQ", "Recall - CHECKED", "Autobrake - RTO", "Flaps - SET", "Flight Controls - CHECKED"],
+        "BEFORE TAKEOFF": ["Transponder - TA/RA", "Strobe Lights - ON"],
+        "CRUISE": ["Altimeters - STD", "FMC/Fuel - CHECKED"],
+        "DESCENT/APPROACH": ["Altimeters - QNH SET", "Landing Data - SET", "Autobrake - SET"],
+        "SHUTDOWN": ["Hydraulic Panel - SET", "Fuel Pumps - OFF", "Flaps - UP", "Parking Brake - AS REQ", "Fuel Control Switches - CUTOFF", "Weather Radar - OFF"],
+        "SECURING": ["ADIRU Switch - OFF", "Emergency Exit Lights - OFF", "Packs Switches - OFF", "APU - OFF"]
+    },
+    "B767": {
+        "PREFLIGHT": ["Oxygen - TESTED", "IRS - OFF TO NAV", "HYDRAULIC PANEL - SET", "WINDOW HEAT - ON", "THROTTLES - IDLE", "GEAR PIN - REMOVED", "PARKING BRAKE - SET"],
+        "BEFORE START": ["FUEL - KGS/PUMPS ON", "WINDOWS - CLOSED/LOCKED", "PASSENGER SIGNS - ON", "DOORS - CLOSED & ARMED"],
+        "AFTER START": ["PROBE HEAT - ON", "ANTI-ICE - AS REQ", "ISOLATION VALVE - OFF", "FUEL CTRL - RUN & LOCKED"],
+        "BEFORE TAXI": ["RECALL - CHECKED", "FLT CTRLS - CHECKED", "FLAPS - SET", "AUTOBRAKE - RTO"],
+        "AFTER TAKEOFF": ["LANDING GEAR - UP & OFF", "FLAPS - UP", "ALTIMETERS - SET STD"],
+        "DESCENT/APPROACH": ["LDG ALT - SET", "PASSANGER SIGNS - ON", "RECALL - CHECKED", "AUTOBRAKE - SET", "VREF/MINIMUMS - SET", "ALTIMETERS - QNH SET"],
+        "LANDING": ["CABIN - SECURED", "SPEEDBRAKE - ARMED", "LANDING GEAR - DOWN", "FLAPS - SET"],
+        "AFTER LANDING": ["ANTI-ICE - AS REQ", "APU - STARTED", "AUTOBRAKE - OFF", "SPEEDBRAKE - DOWN", "FLAPS - UP", "WEATHER RADAR - OFF"]
+    },
+    "A330": {
+        "COCKPIT PREP": ["GEAR PINS & COVERS - REMOVED", "FUEL QUANTITY - CHECK", "SEAT BELTS - ON", "ADIRS - NAV", "BARO REF - BOTH SET"],
+        "BEFORE START": ["T.O SPEEDS & THRUST - BOTH SET", "WINDOWS - CLOSED", "BEACON - ON", "PARKING BRAKE - SET"],
+        "AFTER START": ["ANTI ICE - AS REQ", "ECAM STATUS - CHECKED", "PITCH TRIM - SET", "RUDDER TRIM - CHECKED"],
+        "APPROACH": ["BARO REF - BOTH SET", "SEAT BELTS - ON", "MINIMUM - SET", "AUTO BRAKE - SET", "ENG START SEL - AS REQ"],
+        "LANDING": ["ECAM MEMO - LDG NO BLUE", "GEAR - DOWN", "FLAPS - SET"],
+        "AFTER LANDING": ["RADAR & PRED W/S - OFF", "SPOILERS - DISARM", "FLAPS - RETRACT", "APU - START"],
+        "PARKING": ["PARKING BRAKE/CHOCKS - SET", "ENGINES - OFF", "FUEL PUMPS - OFF"]
     },
     "HondaJet": {
         "CDU SETUP": ["Database Status - CONNECT", "Avionics Settings - AS DESIRED", "Flight Plan - ENTER/VERIFY"],
-        "BEFORE START": ["ATC Clearance - OBTAIN", "Transponder - SQUAWK SET", "Alt Select - SET CLEARED ALT", "Parking Brake - SET"],
-        "AFTER START/TAXI": ["External Power - DISCONNECT", "Lights - AS REQ", "Flaps - TAKE OFF", "Trim - SET (GREEN)"]
+        "BEFORE START": ["ATC Clearance - OBTAIN", "Transponder - SQUAWK SET", "Alt Select - SET CLEARED ALT", "Parking Brake - SET", "Battery - ON", "External Power - AS REQ"],
+        "ENGINE START": ["Doors - CLOSED", "Parking Brake - SET", "CAS Messages - REVIEW", "Elec Volts - MIN 23.5V", "Engine Start Button - PUSH"],
+        "AFTER START/TAXI": ["External Power - DISCONNECT", "Lights - AS REQ", "Flaps - TAKE OFF", "Trim - SET (GREEN)"],
+        "CRUISE": ["Altimeter - STD", "Ice Protection - AS REQ", "Fuel - MONITOR"],
+        "LANDING": ["Landing Gear - DOWN & 3 GREEN", "Flaps - LDG", "Yaw Damper - OFF @50ft", "Throttles - IDLE @Threshold"],
+        "SHUTDOWN": ["Parking Brake - SET", "Engines - OFF", "Electrical - OFF"]
     }
 }
 
-# --- 2. ページ構成 & 究極の無機質CSS ---
-st.set_page_config(page_title="EFBPlus | WebAIMS OPERA", layout="wide")
+# --- 2. PAGE STYLES (究極の無機質・業務用) ---
+st.set_page_config(page_title="WebAIMS OPERA", layout="wide")
 
 st.markdown("""
     <style>
-    /* 全体を等幅フォント、背景をグレーに */
+    /* 全体: コクピット内EFBの質感 */
     html, body, [class*="css"] {
         font-family: 'Courier New', Courier, monospace !important;
-        font-size: 12px !important;
-        background-color: #e0e0e0 !important;
-        color: #000 !important;
+        background-color: #1a1a1a !important;
+        color: #ddd !important;
+        font-size: 13px !important;
     }
-    
-    /* 余計な余白を徹底排除 */
-    .block-container { padding: 0 !important; max-width: 100% !important; }
-    
-    /* ヘッダー（ANA/OPERA風） */
+    .block-container { padding: 0 !important; }
+
+    /* ステータスバー */
     .opera-header {
-        background-color: #003194; color: white;
-        padding: 4px 12px; font-weight: bold;
+        background-color: #00256e; color: white;
+        padding: 5px 15px; font-weight: bold;
+        border-bottom: 2px solid #000;
         display: flex; justify-content: space-between;
-        border-bottom: 2px solid #000;
     }
 
-    /* サイドバーの無機質化 */
+    /* サイドバー: 暗色で無機質に */
     [data-testid="stSidebar"] {
-        background-color: #d0d0d0 !important;
-        border-right: 2px solid #000;
+        background-color: #222 !important;
+        border-right: 1px solid #444;
     }
-    
-    /* OFP表示エリア：ここが画像の再現 */
-    .ofp-paper {
-        background-color: #fff !important;
-        color: #000 !important;
-        padding: 20px;
-        margin: 0;
-        line-height: 1.1;
-        white-space: pre;
-        overflow-x: auto;
-        border-bottom: 2px solid #000;
-        box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
-    }
-
-    /* ボタン・入力欄の角を角に */
     .stButton>button {
-        border-radius: 0 !important;
-        border: 1px solid #000 !important;
-        background-color: #eee !important;
-        color: #000 !important;
-        font-weight: bold;
+        border-radius: 0 !important; border: 1px solid #555 !important;
+        background-color: #333 !important; color: #fff !important;
+        width: 100%; font-weight: bold; margin-bottom: 5px;
     }
-    .stTextInput input { border-radius: 0 !important; border: 1px solid #000 !important; }
+    .stButton>button:hover { border-color: #00256e !important; background-color: #444 !important; }
 
-    /* ツールエリア（下部） */
-    .bottom-tools { background-color: #f0f0f0; padding: 10px; border-top: 1px solid #999; }
-    
-    /* チェックボックスのリスト化 */
+    /* OFP PAPER: 画像通りの白い紙を再現 */
+    .ofp-paper {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        padding: 40px 50px;
+        margin: 20px auto;
+        width: 95%;
+        max-width: 850px;
+        line-height: 1.2;
+        white-space: pre;
+        box-shadow: 10px 10px 20px rgba(0,0,0,0.8);
+        border: 1px solid #888;
+        overflow-x: auto;
+    }
+
+    /* ツールエリア */
+    .bottom-tools {
+        background-color: #111;
+        padding: 20px;
+        border-top: 2px solid #333;
+    }
     .stCheckbox { margin-bottom: -10px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ロジック ---
+# --- 3. LOGIC ---
+def get_val(data, *keys):
+    """辞書から安全にデータを抽出"""
+    for key in keys:
+        if isinstance(data, dict):
+            data = data.get(key, "---")
+        else:
+            return "---"
+    return data if data is not None else "---"
+
 def fetch_simbrief(user_id):
-    res = requests.get(f"https://www.simbrief.com/api/xml.fetcher.php?userid={user_id}&json=1")
-    return res.json() if res.status_code == 200 else None
+    try:
+        res = requests.get(f"https://www.simbrief.com/api/xml.fetcher.php?userid={user_id}&json=1")
+        return res.json() if res.status_code == 200 else None
+    except: return None
 
 def generate_ofp_text(sb):
     now = datetime.utcnow()
-    release_time = now.strftime("%d%H%M %b%y").upper()
-    flight_date = datetime.fromtimestamp(int(sb['params']['time_generated'])).strftime("%d%b%y").upper()
-    etops_apts = sb.get('etops', {}).get('alternates', [])
-    if isinstance(etops_apts, str): etops_apts = [etops_apts]
-    etops_apt_str = " ".join(etops_apts)
-
+    rel_time = now.strftime("%d%H%M %b%y").upper()
+    gen_time_raw = get_val(sb, 'params', 'time_generated')
+    gen_time = datetime.fromtimestamp(int(gen_time_raw)).strftime("%d%b%y").upper() if gen_time_raw != "---" else "---"
+    
+    # 燃料・時間計算の安全化
+    trip_f = get_val(sb, 'fuel', 'enroute_burn')
+    trip_t_sec = get_val(sb, 'times', 'est_time_enroute')
+    trip_t = time.strftime('%H%M', time.gmtime(int(trip_t_sec))) if trip_t_sec != "---" else "---"
+    
     text = f"""[ OFP ] -----------------------------------------------------------
-{sb['atc']['callsign']}   {flight_date}   {sb['origin']['icao_code']}-{sb['destination']['icao_code']}   {sb['aircraft']['icao_code']} {sb['aircraft']['reg']}   RELEASE {release_time}
-OFP 0   {sb['origin']['name'].upper()}-{sb['destination']['name'].upper()}
+{get_val(sb, 'atc', 'callsign')}   {gen_time}   {get_val(sb, 'origin', 'icao_code')}-{get_val(sb, 'destination', 'icao_code')}   {get_val(sb, 'aircraft', 'icao_code')} {get_val(sb, 'aircraft', 'reg')}   RELEASE {rel_time}
+OFP 0   {get_val(sb, 'origin', 'name').upper()}-{get_val(sb, 'destination', 'name').upper()}
 --------------------------------------------------------------------
-ATC C/S   {sb['atc']['callsign']}      {sb['origin']['icao_code']}/{sb['origin']['iata_code']}   {sb['destination']['icao_code']}/{sb['destination']['iata_code']}      CI {sb['general']['costindex']}
-{flight_date}   {sb['aircraft']['reg']}         {sb['times']['est_out'][7:11]}/{sb['times']['sched_out'][7:11]}  {sb['times']['est_in'][7:11]}/{sb['times']['sched_in'][7:11]}
+ATC C/S   {get_val(sb, 'atc', 'callsign')}      {get_val(sb, 'origin', 'icao_code')}/{get_val(sb, 'origin', 'iata_code')}   {get_val(sb, 'destination', 'icao_code')}/{get_val(sb, 'destination', 'iata_code')}      CI {get_val(sb, 'general', 'costindex')}
+{gen_time}   {get_val(sb, 'aircraft', 'reg')}         {get_val(sb, 'times', 'est_out')[7:11]}/{get_val(sb, 'times', 'sched_out')[7:11]}  {get_val(sb, 'times', 'est_in')[7:11]}/{get_val(sb, 'times', 'sched_in')[7:11]}
 --------------------------------------------------------------------
 FUEL            ARPT   FUEL   TIME
 ---------------------------------
-TRIP             {sb['destination']['iata_code']}  {sb['fuel']['enroute_burn']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['est_time_enroute'])))}
-CONT {sb['fuel']['contingency_p']} %             {sb['fuel']['contingency']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['contingency_time'])))}
-ALTN             {sb['alternate'][0]['iata_code'] if sb.get('alternate') else '...'}  {sb['fuel']['alternate_burn'] if sb.get('alternate') else '...'}   {time.strftime('%H%M', time.gmtime(int(sb['times']['alternate_time']))) if sb.get('alternate') else '...'}
-FINRES                {sb['fuel']['reserve']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['reserve_time'])))}
+TRIP             {get_val(sb, 'destination', 'iata_code')}  {trip_f}   {trip_t}
+CONT {get_val(sb, 'fuel', 'contingency_p')}%             {get_val(sb, 'fuel', 'contingency')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'contingency_time')))) if get_val(sb, 'times', 'contingency_time') != "---" else "---"}
+ALTN             {get_val(sb, 'alternate', 0, 'iata_code')}  {get_val(sb, 'fuel', 'alternate_burn')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'alternate_time')))) if get_val(sb, 'times', 'alternate_time') != "---" else "---"}
+FINRES                {get_val(sb, 'fuel', 'reserve')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'reserve_time')))) if get_val(sb, 'times', 'reserve_time') != "---" else "---"}
 ---------------------------------
-MINIMUM T/OFF FUEL   {sb['fuel']['min_takeoff']}
-TAXI             {sb['origin']['iata_code']}  {sb['fuel']['taxi']}
-BLOCK FUEL       {sb['origin']['iata_code']}  {sb['fuel']['plan_block']}
+MINIMUM T/OFF FUEL   {get_val(sb, 'fuel', 'min_takeoff')}
+TAXI             {get_val(sb, 'origin', 'iata_code')}  {get_val(sb, 'fuel', 'taxi')}
+BLOCK FUEL       {get_val(sb, 'origin', 'iata_code')}  {get_val(sb, 'fuel', 'plan_block')}
 --------------------------------------------------------------------
 ROUTING:
-{sb['origin']['icao_code']}/{sb['origin']['plan_rwy']} {sb['general']['route']} {sb['destination']['icao_code']}/{sb['destination']['plan_rwy']}
---------------------------------------------------------------------
-ETOPS/ETP: {etops_apt_str or 'NIL'}
+{get_val(sb, 'origin', 'icao_code')}/{get_val(sb, 'origin', 'plan_rwy')} {get_val(sb, 'general', 'route')} {get_val(sb, 'destination', 'icao_code')}/{get_val(sb, 'destination', 'plan_rwy')}
 --------------------------------------------------------------------
 DISPATCHER: PATRICIA MITCHELL        PIC: MIKUTO / TAJIMA
 --------------------------------------------------------------------"""
     return text
 
-# --- 4. メイン画面表示 ---
+# --- 4. MAIN INTERFACE ---
 if 'authenticated' not in st.session_state: st.session_state['authenticated'] = False
 if 'ofp_text' not in st.session_state: st.session_state['ofp_text'] = None
 
@@ -147,58 +196,64 @@ if not st.session_state['authenticated']:
         st.session_state['authenticated'] = True
         st.rerun()
 else:
-    # サイドバー
+    # Sidebar
     with st.sidebar:
         st.markdown("### DATA INPUT")
-        sb_id = st.text_input("SimBrief ID", value=SB_USER)
+        sb_id = st.text_input("SimBrief ID", value="906331")
         if st.button("LOAD FLIGHT PLAN"):
-            data = fetch_simbrief(sb_id)
-            if data:
-                st.session_state['sb_json'] = data
-                st.session_state['ofp_text'] = generate_ofp_text(data)
+            with st.spinner("FETCHING..."):
+                data = fetch_simbrief(sb_id)
+                if data:
+                    st.session_state['sb_json'] = data
+                    st.session_state['ofp_text'] = generate_ofp_text(data)
+                else: st.error("FAILED")
         
         st.markdown("---")
         st.markdown("### T/D CALC")
-        c1, c2 = st.columns(2)
-        fl = c1.number_input("CRZ FL", 350)
-        tgt = c2.number_input("TGT ALT", 3000)
+        fl = st.number_input("CRZ FL", 350)
+        tgt = st.number_input("TGT ALT", 3000)
         gs = st.number_input("GS", 450)
-        st.markdown(f"DIST: **{((fl*100-tgt)/1000)*3:.1f} NM**")
-        st.markdown(f"V/S: **-{gs*5} FPM**")
+        dist = ((fl*100-tgt)/1000)*3
+        st.markdown(f"DIST: **{dist:.1f} NM** | V/S: **-{gs*5}**")
 
-    # メインヘッダー
-    st.markdown("<div class='opera-header'><span>WebAIMS OPERA (BETA)</span><span>UNIT: LBS / UTC</span></div>", unsafe_allow_html=True)
+    # Top Bar
+    st.markdown("<div class='opera-header'><span>WebAIMS OPERA | EFB PLUS</span><span>UNIT: LBS / UTC</span></div>", unsafe_allow_html=True)
 
-    # OFPエリア（真っ白な紙風）
+    # Main OFP
     if st.session_state['ofp_text']:
         st.markdown(f"<div class='ofp-paper'>{st.session_state['ofp_text']}</div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='ofp-paper'>NO OFP LOADED. ENTER SIMBRIEF ID TO START.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='ofp-paper'>AWAITING SIMBRIEF DATA...</div>", unsafe_allow_html=True)
 
-    # 下部ツールエリア
+    # Tools
     st.markdown("<div class='bottom-tools'>", unsafe_allow_html=True)
-    col1, col2 = st.columns([2, 1])
+    col_cl, col_sp = st.columns([2, 1])
     
-    with col1:
+    with col_cl:
         st.markdown("**[ CHECKLIST ]**")
-        sb = st.session_state.get('sb_json')
-        ac_type = sb['aircraft']['icao_code'] if sb else "B787"
-        if ac_type not in cl_db: ac_type = "B787"
+        sb_data = st.session_state.get('sb_json')
+        # 機体タイプ自動判定、なければデフォルトB787
+        raw_ac = get_val(sb_data, 'aircraft', 'icao_code')
+        cur_ac = raw_ac if raw_ac in cl_db else "B787"
         
-        # フェーズ選択をボタンで（業務用っぽく）
-        phases = list(cl_db[ac_type].keys())
-        if 'cl_phase' not in st.session_state: st.session_state['cl_phase'] = phases[0]
+        sel_ac = st.selectbox("SELECT AIRCRAFT", list(cl_db.keys()), index=list(cl_db.keys()).index(cur_ac))
         
+        phases = list(cl_db[sel_ac].keys())
+        # フェーズ切り替え
         cols = st.columns(len(phases))
-        for i, p in enumerate(phases):
-            if cols[i].button(p): st.session_state['cl_phase'] = p
-            
-        st.markdown(f"--- {st.session_state['cl_phase']} ---")
-        for item in cl_db[ac_type][st.session_state['cl_phase']]:
-            st.checkbox(item)
+        if 'cur_phase' not in st.session_state or st.session_state.get('last_ac') != sel_ac:
+            st.session_state['cur_phase'] = phases[0]
+            st.session_state['last_ac'] = sel_ac
 
-    with col2:
+        for i, ph in enumerate(phases):
+            if cols[i].button(ph): st.session_state['cur_phase'] = ph
+            
+        st.markdown(f"--- {sel_ac} / {st.session_state['cur_phase']} ---")
+        for item in cl_db[sel_ac][st.session_state['cur_phase']]:
+            st.checkbox(item, key=f"check_{sel_ac}_{item}")
+
+    with col_sp:
         st.markdown("**[ SCRATCH PAD ]**")
-        st_canvas(stroke_width=2, stroke_color="black", background_color="#fff", height=250, key="canv")
+        st_canvas(stroke_width=2, stroke_color="black", background_color="#fff", height=250, key="pad")
     
     st.markdown("</div>", unsafe_allow_html=True)
