@@ -12,7 +12,7 @@ from streamlit_drawable_canvas import st_canvas
 # --- 1. Database & Configuration ---
 SB_USER = "906331"
 
-# 完全版チェックリストDB
+# 完全版チェックリストDB（全機体網羅）
 cl_db = {
     "A350": {
         "COCKPIT PREP": ["PARKING BRAKE - SET", "ALL BATTERY SWITCH - ON", "EXTERNAL POWER - PUSH", "ADIRS (1, 2, 3) - NAV", "CREW SUPPLY - ON", "PACKS - AUTO", "NAV LIGHTS - ON", "LOGO LIGHTS - ON", "APU - MASTER-START", "NO SMOKING - AUTO", "NO MOBILE - AUTO", "EMERGENCY LIGHTS - ARMED", "FLIGHT DIRECTORS - ON", "ALTIMETERS - SET", "MCDU - SETUP", "FLT CTL PAGE - CHECK"],
@@ -142,6 +142,7 @@ else:
             st.session_state['sw_running'] = True
         if c2.button("RESET SW"):
             st.session_state['sw_running'] = False
+            st.session_state['sw_start_time'] = 0
         
         if st.session_state['sw_running']:
             elapsed = time.time() - st.session_state['sw_start_time']
@@ -153,8 +154,11 @@ else:
         
         if st.session_state['timer_end']:
             rem = st.session_state['timer_end'] - time.time()
-            if rem > 0: st.metric("REMAINING", time.strftime('%H:%M:%S', time.gmtime(rem)))
-            else: st.warning("TIME UP!"); st.session_state['timer_end'] = None
+            if rem > 0:
+                st.metric("REMAINING", time.strftime('%H:%M:%S', time.gmtime(rem)))
+            else:
+                st.warning("TIME UP!")
+                st.session_state['timer_end'] = None
 
         st.markdown("---")
         menu = st.radio("MENU", ["OPERA MAIN", "CALCULATORS", "WEATHER", "SCRATCH PAD"])
@@ -198,13 +202,16 @@ else:
     elif menu == "WEATHER":
         icao = st.text_input("ICAO", "RJTT").upper()
         if icao:
-            res = requests.get(f"https://metar.vatsim.net/metar.php?id={icao}")
-            st.code(res.text)
+            try:
+                res = requests.get(f"https://metar.vatsim.net/metar.php?id={icao}")
+                st.code(res.text)
+            except:
+                st.error("Weather data unavailable")
 
     elif menu == "SCRATCH PAD":
         st_canvas(stroke_width=3, stroke_color="#000", background_color="#FFF", height=400, key="canvas")
 
-    # --- Checklist Tab (完全版) ---
+    # --- Checklist Tab (下部に常に表示) ---
     st.markdown("---")
     with st.expander("📋 AIRCRAFT CHECKLIST (FULL DATABASE)"):
         ac_type = st.selectbox("AIRCRAFT", list(cl_db.keys()))
@@ -212,6 +219,7 @@ else:
         for item in cl_db[ac_type][phase]:
             st.checkbox(item, key=f"cl_{ac_type}_{phase}_{item}")
 
-    # Auto Refresh
+    # Auto Refresh for Timers
     if st.session_state['sw_running'] or st.session_state['timer_end']:
-        time.sleep(1); st.rerun()
+        time.sleep(1)
+        st.rerun()
