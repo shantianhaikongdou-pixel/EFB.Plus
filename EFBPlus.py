@@ -12,6 +12,7 @@ from streamlit_drawable_canvas import st_canvas
 # --- 1. Database & Configuration ---
 SB_USER = "906331"
 
+# 完全版チェックリストDB（絵文字なし）
 cl_db = {
     "A350": {
         "COCKPIT PREP": ["PARKING BRAKE - SET", "ALL BATTERY SWITCH - ON", "EXTERNAL POWER - PUSH", "ADIRS (1, 2, 3) - NAV", "CREW SUPPLY - ON", "PACKS - AUTO", "NAV LIGHTS - ON", "LOGO LIGHTS - ON", "APU - MASTER-START", "NO SMOKING - AUTO", "NO MOBILE - AUTO", "EMERGENCY LIGHTS - ARMED", "FLIGHT DIRECTORS - ON", "ALTIMETERS - SET", "MCDU - SETUP", "FLT CTL PAGE - CHECK"],
@@ -40,31 +41,6 @@ cl_db = {
         "LANDING": ["G/A ALTITUDE - SET", "CABIN CREW - ADVISED", "ECAM MEMO - LDG NO BLUE", "LDG GEAR - DOWN", "SPLRS - ARM", "FLAPS - SET"],
         "PARKING/SECURE": ["PARKING BRAKE - SET", "ENGINES - OFF", "FUEL PUMPS - OFF", "ADIRS - OFF", "EXT PWR - AS REQ"]
     },
-    "B777": {
-        "PREFLIGHT": ["ADIRU - ON", "THRUST LEVERS - IDLE", "FUEL CONTROL - CUTOFF", "LANDING GEAR - DOWN", "FLAPS - UP", "BATTERY - ON"],
-        "BEFORE START": ["FLIGHT DECK DOOR - CLOSED", "PASSENGER SIGNS - ON", "MCP - SET", "FMS - COMPLETED", "BEACON - ON"],
-        "AFTER START": ["ANTI-ICE - AS REQ", "RECALL - CHECK", "AUTOBRAKE - RTO", "FLAPS - SET"],
-        "BEFORE TAKEOFF": ["FLIGHT CONTROLS - CHECK", "TRANSPONDER - TA/RA"],
-        "DESCENT/APPROACH": ["ALTIMETER - SET", "AUTOBRAKE - SET", "VREF - SET"],
-        "LANDING": ["SPEEDBRAKE - ARMED", "LANDING GEAR - DOWN", "FLAPS - SET"],
-        "SHUTDOWN": ["PARKING BRAKE - SET", "FUEL CONTROL - CUTOFF", "PASSENGER SIGNS - OFF"]
-    },
-    "B767": {
-        "PREFLIGHT": ["BATTERY - ON", "STBY POWER - AUTO", "BUS TIE - AUTO", "IRS - NAV", "HYDRAULICS - ON/AUTO"],
-        "BEFORE START": ["FUEL PUMPS - ON", "BEACON - ON", "MCP - SET"],
-        "AFTER START": ["ANTI-ICE - AS REQ", "APU - OFF", "FLAPS - SET", "AUTOBRAKE - RTO"],
-        "APPROACH": ["ALTIMETER - SET", "SEAT BELTS - ON", "AUTOBRAKE - SET"],
-        "LANDING": ["LANDING GEAR - DOWN", "FLAPS - SET", "SPEEDBRAKE - ARMED"],
-        "SHUTDOWN": ["PARKING BRAKE - SET", "FUEL CONTROL - CUTOFF", "IRS - OFF"]
-    },
-    "A330": {
-        "COCKPIT PREP": ["BATTERIES - ON", "EXTERNAL POWER - ON", "ADIRS - NAV", "SIGNS - ON", "APU - START"],
-        "BEFORE START": ["DOORS - CLOSED", "BEACON - ON", "THRUST LEVERS - IDLE"],
-        "AFTER START": ["ANTI-ICE - AS REQ", "APU - OFF", "PITCH TRIM - SET", "FLAPS - SET"],
-        "TAKEOFF": ["CONFIG - TEST", "TCAS - TA/RA", "PACKS - OFF/ON"],
-        "LANDING": ["GEAR - DOWN", "FLAPS - FULL", "SPOILERS - ARMED"],
-        "SHUTDOWN": ["PARKING BRAKE - SET", "ENGINES - OFF", "FUEL PUMPS - OFF"]
-    },
     "HondaJet": {
         "CDU SETUP": ["Database Status - CONNECT", "Avionics Settings - AS DESIRED", "Flight Plan - ENTER/VERIFY"],
         "BEFORE START": ["ATC Clearance - OBTAIN", "Transponder - SQUAWK SET", "Alt Select - SET CLEARED ALT", "Parking Brake - SET", "Battery - ON", "External Power - AS REQ"],
@@ -77,114 +53,217 @@ cl_db = {
 }
 
 # --- 2. Page Config & Styles ---
-st.set_page_config(page_title="EFBplus Beta | OPERA", layout="wide")
+st.set_page_config(page_title="EFBPlus | OPERA", layout="wide")
 
+# CSS to make the app look like the OFP image (Monospace, no padding)
 st.markdown("""
     <style>
-    .stApp { background-color: #f4f7f9; color: #333; }
-    .opera-header {
+    /* Global Background */
+    .stApp { background-color: #f4f4f4; color: black; }
+    
+    /* Monospace font for everything */
+    html, body, [class*="css"] {
+        font-family: 'Courier New', Courier, monospace !important;
+        font-size: 13px !important;
+    }
+
+    /* OFP Header - ANA Style */
+    .ofp-header {
         background-color: #003194; color: white;
-        padding: 12px 20px; border-radius: 4px;
-        font-family: 'Arial', sans-serif;
-        display: flex; justify-content: space-between; align-items: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-bottom: 20px;
+        padding: 5px 10px; font-weight: bold;
+        display: flex; justify-content: space-between;
     }
-    .opera-logo { font-size: 22px; font-weight: bold; font-style: italic; }
-    .opera-table {
-        width: 100%; border-collapse: collapse;
-        background-color: white; border-radius: 4px; overflow: hidden;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+
+    /* Remove padding and borders for main area */
+    .block-container { padding: 0 !important; }
+    
+    /* Fix Sidebar to monospace and white background */
+    [data-testid="stSidebar"] {
+        background-color: white !important;
+        border-right: 1px solid #ccc;
     }
-    .opera-table th {
-        background-color: #e6eef5; color: #003194;
-        text-align: left; padding: 12px; font-size: 14px;
-        border-bottom: 2px solid #003194;
+    [data-testid="stSidebar"] .stButton>button {
+        background-color: #003194 !important; color: white !important;
+        font-family: monospace; border-radius: 0;
     }
-    .opera-table td { padding: 12px; border-bottom: 1px solid #ddd; font-family: monospace; }
-    .actual-green { color: #1DB954; font-weight: bold; }
-    [data-testid="stSidebar"] { background-color: #ffffff; border-right: 1px solid #ddd; }
-    .stButton>button { background-color: #003194 !important; color: white !important; border-radius: 4px; }
+    
+    /* Input Styling */
+    .stTextInput input {
+        font-family: monospace; border-radius: 0; border: 1px solid #ccc;
+    }
+    
+    /* OFP Text Area - Exactly as image */
+    .ofp-text {
+        background-color: white; padding: 10px;
+        white-space: pre; overflow-x: auto;
+        line-height: 1.2; border-bottom: 2px solid black;
+    }
+    
+    /* Calculator / Checklist Area */
+    .tool-area { background-color: white; padding: 10px; margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 3. Session State Management ---
 if 'authenticated' not in st.session_state: st.session_state['authenticated'] = False
 if 'sb_json' not in st.session_state: st.session_state['sb_json'] = None
+if 'ofp_text' not in st.session_state: st.session_state['ofp_text'] = None
 
 # --- 4. Logic Functions ---
 def fetch_simbrief(user_id):
     res = requests.get(f"https://www.simbrief.com/api/xml.fetcher.php?userid={user_id}&json=1")
     return res.json() if res.status_code == 200 else None
 
+def generate_ofp_text(sb):
+    # Get current timestamp for release time
+    now = datetime.utcnow()
+    release_time = now.strftime("%d%H%M %b%y").upper()
+    flight_date = datetime.fromtimestamp(int(sb['params']['time_generated'])).strftime("%d%b%y").upper()
+
+    # Get ETOPS airports (handles lists or single entry)
+    etops_apts = sb.get('etops', {}).get('alternates', [])
+    if isinstance(etops_apts, str): etops_apts = [etops_apts]
+    etops_apt_str = " ".join(etops_apts)
+
+    text = f"""[ OFP ]
+--------------------------------------------------------------------
+{sb['atc']['callsign']}   {flight_date}   {sb['origin']['icao_code']}-{sb['destination']['icao_code']}   {sb['aircraft']['icao_code']} {sb['aircraft']['reg']}   RELEASE {release_time}
+OFP 0   {sb['origin']['name'].upper()}-{sb['destination']['name'].upper()}
+                WX PROG {sb['times']['sched_out'][7:11]} OBS ...
+
+ ATC C/S   {sb['atc']['callsign']}      {sb['origin']['icao_code']}/{sb['origin']['iata_code']}   {sb['destination']['icao_code']}/{sb['destination']['iata_code']}      CRZ SYS      CI {sb['general']['costindex']}
+{flight_date}   {sb['aircraft']['reg']}         {sb['times']['est_out'][7:11]}/{sb['times']['sched_out'][7:11]}  {sb['times']['est_in'][7:11]}/{sb['times']['sched_in'][7:11]}      GND DIST      {sb['general']['route_distance']}
+{sb['aircraft']['icao_code']} /                      STA  {sb['times']['sched_in'][7:11]}      AIR DIST      {sb['general']['air_distance']}
+                                  CTOT:....                G/C DIST      0
+                                                           AVG WIND   {sb['general']['avg_wind_dir']}/{sb['general']['avg_wind_speed']}
+MAXIMUM   TOW {sb['weights']['max_takeoff_weight']}  LAW {sb['weights']['max_landing_weight']}  ZFW {sb['weights']['max_zfw']}      AVG W/C      {sb['general']['avg_wind_comp']}
+ESTIMATED TOW {sb['weights']['est_takeoff_weight']}  LAW {sb['weights']['est_landing_weight']}  ZFW {sb['weights']['est_zfw']}      AVG ISA      {sb['general']['avg_isa_dev']}
+                                                           AVG FF LB/HR ...
+                                                           FUEL BIAS    P00.0
+ALTN {sb['alternate'][0]['icao_code'] if sb.get('alternate') else 'NONE'}                                                           TKOF ALTN    ...
+FL STEPS ...
+--------------------------------------------------------------------
+                       *** {sb['general']['flight_type'].upper()} FLIGHT ***
+--------------------------------------------------------------------
+DISP RMKS  SAYINTENTIONS.AI TEST FLIGHTNH9921 
+           PLANNED OPTIMUM FLIGHT LEVEL
+
+--------------------------------------------------------------------
+          PLANNED FUEL
+---------------------------------
+FUEL            ARPT   FUEL   TIME
+---------------------------------
+TRIP             {sb['destination']['iata_code']}  {sb['fuel']['enroute_burn']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['est_time_enroute'])))}
+CONT {sb['fuel']['contingency_p']} %             {sb['fuel']['contingency']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['contingency_time'])))}
+ALTN             {sb['alternate'][0]['iata_code'] if sb.get('alternate') else '...'}  {sb['fuel']['alternate_burn'] if sb.get('alternate') else '...'}   {time.strftime('%H%M', time.gmtime(int(sb['times']['alternate_time']))) if sb.get('alternate') else '...'}
+FINRES                {sb['fuel']['reserve']}   {time.strftime('%H%M', time.gmtime(int(sb['times']['reserve_time'])))}
+{sb['general']['flight_type'].upper()}/ETP                0   0000
+---------------------------------
+MINIMUM T/OFF FUEL   {sb['fuel']['min_takeoff']}   ...
+---------------------------------
+EXTRA                    0   0000
+---------------------------------
+T/OFF FUEL           {sb['fuel']['plan_takeoff']}   ...
+TAXI             {sb['origin']['iata_code']}  {sb['fuel']['taxi']}   ...
+---------------------------------
+BLOCK FUEL       {sb['origin']['iata_code']}  {sb['fuel']['plan_block']}
+PIC EXTRA             .....
+TOTAL FUEL            .....
+REASON FOR PIC EXTRA ............
+--------------------------------------------------------------------
+FMC INFO:
+FINRES+ALTN           {int(sb['fuel']['reserve']) + int(sb['fuel']['alternate_burn'])}
+TRIP+TAXI            {int(sb['fuel']['enroute_burn']) + int(sb['fuel']['taxi'])}
+--------------------------------------------------------------------
+MEL/CDL ITEMS DESCRIPTION
+------------- -----------
+{sb['general']['mel_remarks'] or 'NIL'}
+--------------------------------------------------------------------
+ROUTING:
+ROUTE ID: {sb['general']['route_id']}
+{sb['origin']['icao_code']}/{sb['origin']['plan_rwy']} {sb['general']['route']} {sb['destination']['icao_code']}/{sb['destination']['plan_rwy']}
+--------------------------------------------------------------------
+DISPATCHER: PATRICIA MITCHELL           PIC NAME: MIKU, ゴリ
+TEL: +1 800 555 0199           PIC SIGNATURE: ...............
+
+ETOPS/ETP {etops_apt_str}
+--------------------------------------------------------------------
+FLIGHT LOG
+--------------------------------------------------------------------
+POSITION EET ETO MORA IMT WIND EFOB PBRN
+--------------------------------------------------------------------
+{sb['origin']['icao_code']} ... ... {sb['general']['initial_fl']} {sb['general']['avg_wind_dir']}/{sb['general']['avg_wind_speed']} {sb['fuel']['plan_takeoff']} ...
+--------------------------------------------------------------------
+"""
+    return text
+
 # --- 5. Main UI Logic ---
 if not st.session_state['authenticated']:
-    st.markdown("<div class='opera-header'><div class='opera-logo'>EFBplus <span style='font-weight:normal'>LOGIN</span></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='opera-header'><span>WebAIMS OPERA | LOGIN</span></div>", unsafe_allow_html=True)
     if st.text_input("ACCESS CODE", type="password") == "3910":
         st.session_state['authenticated'] = True
         st.rerun()
 else:
-    st.markdown("""
-        <div class='opera-header'>
-            <div class='opera-logo'>WebAIMS <span style='font-weight:normal'>OPERA</span></div>
-            <div style='font-size:12px;'>FLIGHT OPERATIONS PORTAL | BETA 2.0</div>
-        </div>
-        """, unsafe_allow_html=True)
-
+    # --- Sidebar ---
     with st.sidebar:
-        menu = st.radio("MENU", ["OPERA MAIN", "CALCULATORS", "WEATHER", "SCRATCH PAD"])
-
-    # --- Main Content ---
-    if menu == "OPERA MAIN":
-        col_sb1, col_sb2 = st.columns([3, 1])
-        with col_sb1:
-            sb_input = st.text_input("SimBrief ID or URL", value=SB_USER)
-        with col_sb2:
-            st.write(" ")
-            if st.button("FETCH OFP"):
-                uid = re.search(r"userid=(\d+)", sb_input).group(1) if "userid=" in sb_input else sb_input
-                st.session_state['sb_json'] = fetch_simbrief(uid)
+        st.markdown("### OPERA MAIN")
+        sb_input = st.text_input("SimBrief ID", value=SB_USER)
+        if st.button("FETCH OFP"):
+            uid = re.search(r"userid=(\d+)", sb_input).group(1) if "userid=" in sb_input else sb_input
+            st.session_state['sb_json'] = fetch_simbrief(uid)
+            if st.session_state['sb_json']:
+                st.session_state['ofp_text'] = generate_ofp_text(st.session_state['sb_json'])
         
-        if st.session_state['sb_json']:
-            sb = st.session_state['sb_json']
-            st.markdown(f"### {sb['atc']['callsign']} | {sb['origin']['icao_code']} -> {sb['destination']['icao_code']}")
-            st.markdown(f"""
-            <table class='opera-table'>
-                <thead><tr><th>EVENT</th><th>PLAN</th><th>ACTUAL</th><th>REMARKS</th></tr></thead>
-                <tbody>
-                    <tr><td>BLOCK OFF</td><td>{sb['times']['est_off']}</td><td class='actual-green'>---</td><td>WAITING</td></tr>
-                    <tr><td>ZFW / TOW</td><td>{sb['weights']['est_zfw']} / {sb['weights']['est_takeoff_weight']}</td><td>---</td><td>KG</td></tr>
-                </tbody>
-            </table>
-            """, unsafe_allow_html=True)
-            v = sb.get('takeoff', {})
-            st.info(f"V1: {v.get('v1','--')} | VR: {v.get('vr','--')} | V2: {v.get('v2','--')} | TRIM: {v.get('trim','--')}")
-
-    elif menu == "CALCULATORS":
-        st.subheader("T/D CALCULATOR")
+        st.markdown("---")
+        # Quick Calc
+        st.markdown("### T/D CALCULATOR")
         c1, c2, c3 = st.columns(3)
-        curr = c1.number_input("Current FT", 0, 45000, 35000)
-        targ = c2.number_input("Target FT", 0, 45000, 3000)
-        gs = c3.number_input("GS", 100, 600, 400)
+        curr = c1.number_input("CRZ FL", value=350, step=10) * 100
+        targ = c2.number_input("TGT ALT", value=3000, step=100)
+        gs = c3.number_input("GS", value=450, step=10)
         dist = ((curr - targ) / 1000) * 3
         vs = gs * 5
-        st.success(f"Start Descent at: {dist:.1f} NM | VS: -{vs} fpm")
-            
-    elif menu == "WEATHER":
-        icao = st.text_input("ICAO", "RJTT").upper()
-        if icao:
-            try:
-                res = requests.get(f"https://metar.vatsim.net/metar.php?id={icao}")
-                st.code(res.text)
-            except:
-                st.error("Weather data unavailable")
+        st.markdown(f"**DIST:** {dist:.1f} NM | **V/S:** -{vs} FPM")
 
-    elif menu == "SCRATCH PAD":
-        st_canvas(stroke_width=3, stroke_color="#000", background_color="#FFF", height=400, key="canvas")
+    # --- Main Area ---
+    st.markdown("<div class='ofp-header'><span>WebAIMS OPERA</span><span>FLIGHT OPERATIONS PORTAL | BETA 2.0</span></div>", unsafe_allow_html=True)
 
-    # --- Checklist Tab ---
-    st.markdown("---")
-    with st.expander("CHECKLIST"):
-        ac_type = st.selectbox("AIRCRAFT", list(cl_db.keys()))
-        phase = st.radio("PHASE", list(cl_db[ac_type].keys()), horizontal=True)
-        for item in cl_db[ac_type][phase]:
-            st.checkbox(item, key=f"cl_{ac_type}_{phase}_{item}")
+    # OFP Text Area (If data exists)
+    if st.session_state['ofp_text']:
+        st.markdown(f"<div class='ofp-text'>{st.session_state['ofp_text']}</div>", unsafe_allow_html=True)
+    else:
+        st.info("Input SimBrief ID in sidebar and press FETCH OFP.")
+
+    # Lower Tools Area
+    st.markdown("<div class='tool-area'>", unsafe_allow_html=True)
+    
+    col_tools1, col_tools2 = st.columns([2, 1])
+    
+    with col_tools1:
+        st.markdown("### CHECKLIST")
+        sb = st.session_state['sb_json']
+        # Set default AC type based on OFP if available
+        default_ac = sb['aircraft']['icao_code'] if sb else "B787"
+        if default_ac not in cl_db: default_ac = "B787"
+        
+        ac_type = st.selectbox("AIRCRAFT", list(cl_db.keys()), index=list(cl_db.keys()).index(default_ac))
+        
+        phases = list(cl_db[ac_type].keys())
+        # Use columns for phases for monospace look
+        phase_cols = st.columns(len(phases))
+        # Logic to remember selected phase (using buttons to mimic tabs)
+        if 'cl_phase' not in st.session_state: st.session_state['cl_phase'] = phases[0]
+        for i, ph in enumerate(phases):
+            if phase_cols[i].button(ph, key=f"btn_ph_{ph}"):
+                st.session_state['cl_phase'] = ph
+        
+        selected_phase = st.session_state['cl_phase']
+        st.markdown(f"**--- {ac_type} {selected_phase} ---**")
+        for item in cl_db[ac_type][selected_phase]:
+            st.checkbox(item, key=f"cl_{ac_type}_{selected_phase}_{item}")
+
+    with col_tools2:
+        st.markdown("### SCRATCH PAD")
+        st_canvas(stroke_width=2, stroke_color="black", background_color="white", height=300, key="canvas")
+
+    st.markdown("</div>", unsafe_allow_html=True)
