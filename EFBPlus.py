@@ -1,12 +1,10 @@
 import streamlit as st
-import pandas as pd
 from datetime import datetime
 import requests
-import re
 import time
 from streamlit_drawable_canvas import st_canvas
 
-# --- 1. CHECKLIST DATABASE ---
+# --- 1. FULL CHECKLIST DATABASE (みくとのリストを完全統合) ---
 cl_db = {
     "A350": {
         "COCKPIT PREP": ["PARKING BRAKE - SET", "ALL BATTERY SWITCH - ON", "EXTERNAL POWER - PUSH", "ADIRS (1, 2, 3) - NAV", "CREW SUPPLY - ON", "PACKS - AUTO", "NAV LIGHTS - ON", "LOGO LIGHTS - ON", "APU - MASTER-START", "NO SMOKING - AUTO", "NO MOBILE - AUTO", "EMERGENCY LIGHTS - ARMED", "FLIGHT DIRECTORS - ON", "ALTIMETERS - SET", "MCDU - SETUP", "FLT CTL PAGE - CHECK"],
@@ -75,185 +73,119 @@ cl_db = {
     }
 }
 
-# --- 2. PAGE STYLES (究極の無機質・業務用) ---
-st.set_page_config(page_title="WebAIMS OPERA", layout="wide")
+# --- 2. STYLING (プロ仕様・柔軟レイアウト) ---
+st.set_page_config(page_title="G3 OPERA EFB", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    /* 全体: コクピット内EFBの質感 */
-    html, body, [class*="css"] {
-        font-family: 'Courier New', Courier, monospace !important;
-        background-color: #1a1a1a !important;
-        color: #ddd !important;
-        font-size: 13px !important;
-    }
-    .block-container { padding: 0 !important; }
-
-    /* ステータスバー */
-    .opera-header {
-        background-color: #00256e; color: white;
-        padding: 5px 15px; font-weight: bold;
-        border-bottom: 2px solid #000;
+    .stApp { background-color: #080808; color: #ffffff; }
+    
+    /* ヘッダー */
+    .header-bar {
+        background-color: #00256e; padding: 10px 20px;
         display: flex; justify-content: space-between;
+        border-bottom: 2px solid #000; font-weight: bold;
     }
 
-    /* サイドバー: 暗色で無機質に */
-    [data-testid="stSidebar"] {
-        background-color: #222 !important;
-        border-right: 1px solid #444;
+    /* 各セクションのコンテナ */
+    .pane {
+        background: #121212; border: 1px solid #333;
+        border-radius: 5px; padding: 15px; height: 82vh; overflow-y: auto;
     }
-    .stButton>button {
-        border-radius: 0 !important; border: 1px solid #555 !important;
-        background-color: #333 !important; color: #fff !important;
-        width: 100%; font-weight: bold; margin-bottom: 5px;
-    }
-    .stButton>button:hover { border-color: #00256e !important; background-color: #444 !important; }
 
-    /* OFP PAPER: 画像通りの白い紙を再現 */
+    /* OFP用紙 */
     .ofp-paper {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        padding: 40px 50px;
-        margin: 20px auto;
-        width: 95%;
-        max-width: 850px;
-        line-height: 1.2;
-        white-space: pre;
-        box-shadow: 10px 10px 20px rgba(0,0,0,0.8);
-        border: 1px solid #888;
-        overflow-x: auto;
+        background: #fff; color: #000; padding: 25px;
+        font-family: 'Courier New', monospace; font-size: 13px;
+        line-height: 1.2; white-space: pre; border-radius: 3px;
     }
 
-    /* ツールエリア */
-    .bottom-tools {
-        background-color: #111;
-        padding: 20px;
-        border-top: 2px solid #333;
+    /* ボタン類 */
+    .stButton>button {
+        width: 100%; border-radius: 0; background: #222; color: #00e5ff; border: 1px solid #444;
     }
-    .stCheckbox { margin-bottom: -10px !important; }
+    .stButton>button:hover { background: #00e5ff; color: #000; }
+    
+    /* チェックボックス */
+    .stCheckbox { padding: 5px 0; border-bottom: 1px solid #222; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. LOGIC ---
-def get_val(data, *keys):
-    """辞書から安全にデータを抽出"""
-    for key in keys:
-        if isinstance(data, dict):
-            data = data.get(key, "---")
-        else:
-            return "---"
-    return data if data is not None else "---"
+# --- 3. MAIN UI ---
+st.markdown('<div class="header-bar"><span>G3 EFB OPERATOR</span><span>MIKUTO TAJIMA | UTC ' + datetime.utcnow().strftime("%H:%M") + '</span></div>', unsafe_allow_html=True)
 
-def fetch_simbrief(user_id):
-    try:
-        res = requests.get(f"https://www.simbrief.com/api/xml.fetcher.php?userid={user_id}&json=1")
-        return res.json() if res.status_code == 200 else None
-    except: return None
+col_left, col_mid, col_right = st.columns([1, 2, 1.2])
 
-def generate_ofp_text(sb):
-    now = datetime.utcnow()
-    rel_time = now.strftime("%d%H%M %b%y").upper()
-    gen_time_raw = get_val(sb, 'params', 'time_generated')
-    gen_time = datetime.fromtimestamp(int(gen_time_raw)).strftime("%d%b%y").upper() if gen_time_raw != "---" else "---"
+# --- 左ペイン: データ接続 & TOD ---
+with col_left:
+    st.markdown('<div class="pane">', unsafe_allow_html=True)
+    st.subheader("SYSTEM LINK")
+    sb_id = st.text_input("SimBrief ID", "906331")
+    if st.button("CONNECT / REFRESH"):
+        try:
+            r = requests.get(f"https://www.simbrief.com/api/xml.fetcher.php?userid={sb_id}&json=1")
+            st.session_state['sb'] = r.json()
+        except: st.error("CONNECTION FAILED")
     
-    # 燃料・時間計算の安全化
-    trip_f = get_val(sb, 'fuel', 'enroute_burn')
-    trip_t_sec = get_val(sb, 'times', 'est_time_enroute')
-    trip_t = time.strftime('%H%M', time.gmtime(int(trip_t_sec))) if trip_t_sec != "---" else "---"
+    st.markdown("---")
+    st.subheader("TOD CALC")
+    fl = st.number_input("CRZ FL", 100, 450, 350)
+    tgt = st.number_input("TGT ALT", 0, 40000, 3000)
+    dist = ((fl*100 - tgt)/1000) * 3
+    st.info(f"DESCENT DIST: {dist:.1f} NM")
     
-    text = f"""[ OFP ] -----------------------------------------------------------
-{get_val(sb, 'atc', 'callsign')}   {gen_time}   {get_val(sb, 'origin', 'icao_code')}-{get_val(sb, 'destination', 'icao_code')}   {get_val(sb, 'aircraft', 'icao_code')} {get_val(sb, 'aircraft', 'reg')}   RELEASE {rel_time}
-OFP 0   {get_val(sb, 'origin', 'name').upper()}-{get_val(sb, 'destination', 'name').upper()}
---------------------------------------------------------------------
-ATC C/S   {get_val(sb, 'atc', 'callsign')}      {get_val(sb, 'origin', 'icao_code')}/{get_val(sb, 'origin', 'iata_code')}   {get_val(sb, 'destination', 'icao_code')}/{get_val(sb, 'destination', 'iata_code')}      CI {get_val(sb, 'general', 'costindex')}
-{gen_time}   {get_val(sb, 'aircraft', 'reg')}         {get_val(sb, 'times', 'est_out')[7:11]}/{get_val(sb, 'times', 'sched_out')[7:11]}  {get_val(sb, 'times', 'est_in')[7:11]}/{get_val(sb, 'times', 'sched_in')[7:11]}
---------------------------------------------------------------------
-FUEL            ARPT   FUEL   TIME
----------------------------------
-TRIP             {get_val(sb, 'destination', 'iata_code')}  {trip_f}   {trip_t}
-CONT {get_val(sb, 'fuel', 'contingency_p')}%             {get_val(sb, 'fuel', 'contingency')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'contingency_time')))) if get_val(sb, 'times', 'contingency_time') != "---" else "---"}
-ALTN             {get_val(sb, 'alternate', 0, 'iata_code')}  {get_val(sb, 'fuel', 'alternate_burn')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'alternate_time')))) if get_val(sb, 'times', 'alternate_time') != "---" else "---"}
-FINRES                {get_val(sb, 'fuel', 'reserve')}   {time.strftime('%H%M', time.gmtime(int(get_val(sb, 'times', 'reserve_time')))) if get_val(sb, 'times', 'reserve_time') != "---" else "---"}
----------------------------------
-MINIMUM T/OFF FUEL   {get_val(sb, 'fuel', 'min_takeoff')}
-TAXI             {get_val(sb, 'origin', 'iata_code')}  {get_val(sb, 'fuel', 'taxi')}
-BLOCK FUEL       {get_val(sb, 'origin', 'iata_code')}  {get_val(sb, 'fuel', 'plan_block')}
---------------------------------------------------------------------
-ROUTING:
-{get_val(sb, 'origin', 'icao_code')}/{get_val(sb, 'origin', 'plan_rwy')} {get_val(sb, 'general', 'route')} {get_val(sb, 'destination', 'icao_code')}/{get_val(sb, 'destination', 'plan_rwy')}
---------------------------------------------------------------------
-DISPATCHER: PATRICIA MITCHELL        PIC: MIKUTO / TAJIMA
---------------------------------------------------------------------"""
-    return text
+    st.markdown("---")
+    st.subheader("MEMO")
+    st_canvas(stroke_width=2, stroke_color="#00e5ff", background_color="#000", height=150, key="pad")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 4. MAIN INTERFACE ---
-if 'authenticated' not in st.session_state: st.session_state['authenticated'] = False
-if 'ofp_text' not in st.session_state: st.session_state['ofp_text'] = None
+# --- 中央ペイン: OFP表示 ---
+with col_mid:
+    st.markdown('<div class="pane">', unsafe_allow_html=True)
+    if 'sb' in st.session_state:
+        sb = st.session_state['sb']
+        ofp = f"""
+{sb['atc']['callsign']}   {sb['aircraft']['icao_code']}   {sb['aircraft']['reg']}
+{sb['origin']['icao_code']} -> {sb['destination']['icao_code']}
 
-if not st.session_state['authenticated']:
-    st.markdown("<div class='opera-header'><span>LOGIN REQUIRED</span></div>", unsafe_allow_html=True)
-    if st.text_input("ACCESS CODE", type="password") == "3910":
-        st.session_state['authenticated'] = True
-        st.rerun()
-else:
-    # Sidebar
-    with st.sidebar:
-        st.markdown("### DATA INPUT")
-        sb_id = st.text_input("SimBrief ID", value="906331")
-        if st.button("LOAD FLIGHT PLAN"):
-            with st.spinner("FETCHING..."):
-                data = fetch_simbrief(sb_id)
-                if data:
-                    st.session_state['sb_json'] = data
-                    st.session_state['ofp_text'] = generate_ofp_text(data)
-                else: st.error("FAILED")
-        
-        st.markdown("---")
-        st.markdown("### T/D CALC")
-        fl = st.number_input("CRZ FL", 350)
-        tgt = st.number_input("TGT ALT", 3000)
-        gs = st.number_input("GS", 450)
-        dist = ((fl*100-tgt)/1000)*3
-        st.markdown(f"DIST: **{dist:.1f} NM** | V/S: **-{gs*5}**")
-
-    # Top Bar
-    st.markdown("<div class='opera-header'><span>WebAIMS OPERA | EFB PLUS</span><span>UNIT: LBS / UTC</span></div>", unsafe_allow_html=True)
-
-    # Main OFP
-    if st.session_state['ofp_text']:
-        st.markdown(f"<div class='ofp-paper'>{st.session_state['ofp_text']}</div>", unsafe_allow_html=True)
+CI: {sb['general']['costindex']}   FL: {sb['general']['initial_altitude']}
+--------------------------------------------------
+FUEL (LBS)
+TRIP:    {sb['fuel']['enroute_burn']}
+ALTN:    {sb['fuel']['alternate_burn']}
+RESV:    {sb['fuel']['reserve']}
+BLOCK:   {sb['fuel']['plan_block']}
+--------------------------------------------------
+ROUTE:
+{sb['general']['route']}
+        """
+        st.markdown(f'<div class="ofp-paper">{ofp}</div>', unsafe_allow_html=True)
     else:
-        st.markdown("<div class='ofp-paper'>AWAITING SIMBRIEF DATA...</div>", unsafe_allow_html=True)
+        st.markdown('<div class="ofp-paper">AWAITING SYSTEM LINK...</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Tools
-    st.markdown("<div class='bottom-tools'>", unsafe_allow_html=True)
-    col_cl, col_sp = st.columns([2, 1])
+# --- 右ペイン: 全機体・全フェーズ対応チェックリスト ---
+with col_right:
+    st.markdown('<div class="pane">', unsafe_allow_html=True)
+    st.subheader("CHECKLIST")
     
-    with col_cl:
-        st.markdown("**[ CHECKLIST ]**")
-        sb_data = st.session_state.get('sb_json')
-        # 機体タイプ自動判定、なければデフォルトB787
-        raw_ac = get_val(sb_data, 'aircraft', 'icao_code')
-        cur_ac = raw_ac if raw_ac in cl_db else "B787"
-        
-        sel_ac = st.selectbox("SELECT AIRCRAFT", list(cl_db.keys()), index=list(cl_db.keys()).index(cur_ac))
-        
-        phases = list(cl_db[sel_ac].keys())
-        # フェーズ切り替え
-        cols = st.columns(len(phases))
-        if 'cur_phase' not in st.session_state or st.session_state.get('last_ac') != sel_ac:
-            st.session_state['cur_phase'] = phases[0]
-            st.session_state['last_ac'] = sel_ac
-
-        for i, ph in enumerate(phases):
-            if cols[i].button(ph): st.session_state['cur_phase'] = ph
-            
-        st.markdown(f"--- {sel_ac} / {st.session_state['cur_phase']} ---")
-        for item in cl_db[sel_ac][st.session_state['cur_phase']]:
-            st.checkbox(item, key=f"check_{sel_ac}_{item}")
-
-    with col_sp:
-        st.markdown("**[ SCRATCH PAD ]**")
-        st_canvas(stroke_width=2, stroke_color="black", background_color="#fff", height=250, key="pad")
+    # 機体選択（SimBriefの機体コードを自動選択、なければ手動）
+    auto_ac = st.session_state.get('sb', {}).get('aircraft', {}).get('icao_code', "A350")
+    if auto_ac not in cl_db: auto_ac = "B787"
     
-    st.markdown("</div>", unsafe_allow_html=True)
+    sel_ac = st.selectbox("AIRCRAFT TYPE", list(cl_db.keys()), index=list(cl_db.keys()).index(auto_ac))
+    
+    # フェーズ選択
+    phases = list(cl_db[sel_ac].keys())
+    sel_phase = st.selectbox("FLIGHT PHASE", phases)
+    
+    st.markdown(f"**--- {sel_ac} / {sel_phase} ---**")
+    
+    # リスト表示
+    for item in cl_db[sel_ac][sel_phase]:
+        st.checkbox(item, key=f"cl_{sel_ac}_{sel_phase}_{item}")
+        
+    if st.button("CLEAR ALL"):
+        st.rerun()
+        
+    st.markdown('</div>', unsafe_allow_html=True)
